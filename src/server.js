@@ -1,19 +1,23 @@
 const amqp = require('amqplib/callback_api');
 class Server {
-    constructor(connection,queus){ //,routing,rpc=true
+    constructor(connection){ //,routing,rpc=true
         this.connection = connection;
-        this.queus = queus;
         // this.routing = routing;
         // this.rpc = rpc
         this.start_server = this.start_server.bind(this);
         this.initChannels = this.initChannels.bind(this);   
         this.consumer = this.consumer.bind(this);
+        this.createExchangeRoute = this.createExchangeRoute.bind(this);
     }
 
     // Запускаем сервис
-    run(reply) {
-        this.reply = reply;
-        amqp.connect(this.connection,this.start_server);
+    run(options) {
+        if (options.route && options.exchange && options.queues && options.reply){
+            this.options = options;
+            amqp.connect(this.connection,this.start_server);
+        } else {
+            throw "Not options";
+        }
     }
 
     // Стартуем сервер
@@ -30,36 +34,41 @@ class Server {
         if (err) {
             throw err;
         }
-        if (Array.isArray(this.queus)) {
-            for (let que of this.queus) {
+        if (Array.isArray(this.options.queues)) {
+            for (let que of this.options.queues) {
                 this.createChannels(que);
             }
         } else {
-            this.createChannels(this.queus);
+            this.createChannels(this.options.queues);
         }
     }
 
-    createChannels(queus,channel) {
-        this.channel.assertQueue(queus, {
+    // Создание канала
+    createChannels(queues) {
+        this.channel.assertExchange(this.options.exchange, 'direct', {
             durable: true
         });
-        this.channel.prefetch(1);
+        this.channel.assertQueue(queues, {},this.createExchangeRoute);
         console.log(' [x] Awaiting RPC requests');
-        this.channel.consume(queus,this.consumer);
+    }
+
+    // Связываем очередь и роутер
+    createExchangeRoute(err, q) {
+        this.channel.bindQueue(q.queue, this.options.exchange, this.options.route);
+        this.channel.consume(q.queue,this.consumer);
     }
 
     // Отдаем ответ Gateway
     consumer(msg) {
         let content = msg.content.toString();
-        let res = this.reply(content);
+        let res = this.options.reply(content);
         if (typeof res === 'object') {
             res = JSON.stringify(res);
         } else {
             res = res.toString();
         }
-
         // возвращаем ответ клиенту/сервису
-        this.channel.sendToQueue(msg.properties.replyTo,
+        this.channel.publish(msg.properties.replyTo.queue,msg.properties.exchange,
             Buffer.from(res), {
                 correlationId: msg.properties.correlationId
             }

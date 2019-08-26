@@ -2,16 +2,30 @@ const express = require('express');
 const gateway = require('../src/server');
 const client = require('../src/client');
 const app = express();
-const server_gateway = new gateway('amqp://localhost','hello');
-const clients = new client('amqp://localhost','');
+const server_gateway = new gateway('amqp://localhost');
+const clients = new client('amqp://localhost');
 let index = 1;
-server_gateway.run((a)=>{
+
+server_gateway.run({
+  route: 'test',
+  exchange: 'test',
+  queues: 'hello',
+  reply: (a)=>{
     index += 1;
-    return {'a':index}
+    return {'a':index} 
+  }
 });
 
 async function midd(req,res,next){
-    await clients.run({a:2},'hello',next,req);
+    await clients.run({
+      req: req,
+      next: next,
+      body: {a:2},
+      queue_service: 'hello',
+      route: 'test',
+      exchange: 'test',
+      queues: 'hello2'
+    });
     // req.data = clients.res;
     
 }
