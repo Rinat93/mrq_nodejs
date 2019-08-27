@@ -1,4 +1,4 @@
-const amqp = require('amqplib/callback_api');
+const amqp = require('amqplib');
 
 class Client {
     constructor(connection){ //,routing,rpc=true
@@ -15,27 +15,25 @@ class Client {
     async run(options) {
         if (options.body && options.req && options.queue_service && options.next && options.route && options.exchange && options.queues){
             this.options = options;
-            await amqp.connect(this.connection,this.start_server);
+            amqp.connect(this.connection).then((conn)=>{
+                this.start_server(conn)
+            });
         } else {
             throw "Not options";
         }
     }
 
     // Стартуем сервер клиента
-    async start_server(err,connect) {
-        if (err) {
-            throw err;
-        }
+    async start_server(connect) {
         this.connect = connect;
-        await this.connect.createChannel(this.initChannels);
+        this.connect.createChannel().then((channel)=>{
+            this.initChannels(channel)
+        })
     }
 
     // Инициализация для создания канала
-    async initChannels(err, channel) {
+    async initChannels(channel) {
         this.channel = channel;
-        if (err) {
-            throw err;
-        }
         if (Array.isArray(this.options.queues)) {
             for (let que of this.options.queues) {
                 await this.createChannels(que);
@@ -47,19 +45,24 @@ class Client {
 
     // Создание канала
     async createChannels(queus) {
-        await this.channel.assertExchange(this.options.exchange, 'direct', {
+        let ok =  this.channel.assertExchange(this.options.exchange, 'direct', {
             durable: true
         });
 
-        await this.channel.assertQueue(this.options.queues, {}, this.clients_callback);
+        ok = ok.then(()=>{
+            return this.channel.assertQueue(this.options.queues, {});
+        });
+
+        ok.then((qok)=>{
+            return this.clients_callback(qok);
+        })
+
+        // await this.channel.assertQueue(this.options.queues, {}, this.clients_callback);
         
     }
     // Выполняем отправку запроса в сервис 
-    async clients_callback(error2, q) {
+    async clients_callback(q) {
         this.channel.bindQueue(q.queue, this.options.exchange, this.options.route);
-        if (error2) {
-            throw error2;
-        }
         // Дожидаемся ответа от сервера
         await this.channel.consume(this.options.queues,this.consumer, {
             noAck: true
