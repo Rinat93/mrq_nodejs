@@ -67,6 +67,7 @@ class Server {
         } else {
             res = res.toString();
         }
+        console.log(res)
         // возвращаем ответ клиенту/сервису
         this.channel.publish(msg.properties.replyTo.queue,msg.properties.exchange,
             Buffer.from(res), {

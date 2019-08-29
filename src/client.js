@@ -15,8 +15,8 @@ class Client {
     async run(options) {
         if (options.body && options.req && options.queue_service && options.next && options.route && options.exchange && options.queues){
             this.options = options;
-            amqp.connect(this.connection).then((conn)=>{
-                this.start_server(conn)
+            amqp.connect(this.connection).then(async (conn)=>{
+               await this.start_server(conn)
             });
         } else {
             throw "Not options";
@@ -26,8 +26,8 @@ class Client {
     // Стартуем сервер клиента
     async start_server(connect) {
         this.connect = connect;
-        this.connect.createChannel().then((channel)=>{
-            this.initChannels(channel)
+        this.connect.createChannel().then(async (channel)=>{
+            await this.initChannels(channel)
         })
     }
 
@@ -49,20 +49,19 @@ class Client {
             durable: true
         });
 
-        ok = ok.then(()=>{
-            return this.channel.assertQueue(this.options.queues, {});
-        });
+        ok = ok.then(async ()=>{
+            return await this.channel.assertQueue(this.options.queues, {});
+        }).then(async (qok) => {
+            return await this.clients_callback(qok);
 
-        ok.then((qok)=>{
-            return this.clients_callback(qok);
-        })
+        });
 
         // await this.channel.assertQueue(this.options.queues, {}, this.clients_callback);
         
     }
     // Выполняем отправку запроса в сервис 
     async clients_callback(q) {
-        this.channel.bindQueue(q.queue, this.options.exchange, this.options.route);
+        this.channel.bindQueue(this.options.queue_service, this.options.exchange, this.options.route);
         // Дожидаемся ответа от сервера
         await this.channel.consume(this.options.queues,this.consumer, {
             noAck: true
@@ -83,11 +82,12 @@ class Client {
     // Отдаем ответ Gateway
     async consumer(msg) {
         if (msg.properties.correlationId == this.correlationId) {
+            console.log(msg)
             this.options.req.data = msg.content.toString();
             this.options.next();
-            setTimeout(() => { 
-                this.connect.close(); 
-            }, 500);
+            // setTimeout(() => { 
+            //     this.connect.close(); 
+            // }, 500);
         }
     }
 

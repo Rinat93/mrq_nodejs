@@ -9,10 +9,11 @@ let index = 1;
 server_gateway.run({
   route: 'test',
   exchange: 'te2st',
-  queues: 'hello',
+  queues: 'hello3',
   reply: (a)=>{
+    // console.log(a)
     index += 1;
-    return {'a':index} 
+    return {'a':index+1} 
   }
 });
 
@@ -21,7 +22,7 @@ async function midd(req,res,next){
       req: req,
       next: next,
       body: {a:2},
-      queue_service: 'hello',
+      queue_service: 'hello3',
       route: 'test',
       exchange: 'test',
       queues: 'hello2'
@@ -34,7 +35,6 @@ async function midd(req,res,next){
 app.use(midd);
 
 app.get('/', function (req, res) {
-    console.log(1)
   res.json(req.data);
 });
 
