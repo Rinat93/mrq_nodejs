@@ -8,7 +8,7 @@ let index = 1;
 
 server_gateway.run({
   route: 'test',
-  exchange: 'te2st',
+  exchange: 'test',
   queues: 'hello3',
   reply: (a)=>{
     // console.log(a)

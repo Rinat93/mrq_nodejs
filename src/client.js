@@ -82,8 +82,9 @@ class Client {
     // Отдаем ответ Gateway
     async consumer(msg) {
         if (msg.properties.correlationId == this.correlationId) {
-            console.log(msg)
+            console.log(msg.content.toString())
             this.options.req.data = msg.content.toString();
+
             this.options.next();
             // setTimeout(() => { 
             //     this.connect.close(); 

@@ -1,62 +1,74 @@
-const amqp = require('amqplib/callback_api');
-class Server {
+// const amqp = require('amqplib');
+const {amqp, BaseService} = require('./base');
+class Server extends BaseService {
     constructor(connection){ //,routing,rpc=true
-        this.connection = connection;
+        super(connection);
         // this.routing = routing;
         // this.rpc = rpc
         this.start_server = this.start_server.bind(this);
-        this.initChannels = this.initChannels.bind(this);   
+        // this.initChannels = this.initChannels.bind(this);   
         this.consumer = this.consumer.bind(this);
-        this.createExchangeRoute = this.createExchangeRoute.bind(this);
+        // this.createExchangeRoute = this.createExchangeRoute.bind(this);
     }
 
     // Запускаем сервис
-    run(options) {
+    async run(options) {
         if (options.route && options.exchange && options.queues && options.reply){
             this.options = options;
-            amqp.connect(this.connection,this.start_server);
+            await amqp.connect(this.connection).then(async (err,conn)=>{
+                await this.start_server(err,conn)
+            });
         } else {
             throw "Not options";
         }
     }
 
     // Стартуем сервер
-    start_server(err,connect) {
+    async start_server(err,connect) {
         if (err) {
             throw err;
         }
-        connect.createChannel(this.initChannels);
-    }
-
-    // Создание канала
-    initChannels(err, channel) {
-        this.channel = channel;
-        if (err) {
-            throw err;
-        }
-        if (Array.isArray(this.options.queues)) {
-            for (let que of this.options.queues) {
-                this.createChannels(que);
-            }
-        } else {
-            this.createChannels(this.options.queues);
-        }
-    }
-
-    // Создание канала
-    createChannels(queues) {
-        this.channel.assertExchange(this.options.exchange, 'direct', {
-            durable: true
+        connect.createChannel().then(async (err,conn)=>{
+            // await this.initChannels(err,conn);
+            this.create_channels(conn,this.options).then(()=>{
+                this.consumer()
+            })
         });
-        this.channel.assertQueue(queues, {},this.createExchangeRoute);
-        console.log(' [x] Awaiting RPC requests');
     }
 
-    // Связываем очередь и роутер
-    createExchangeRoute(err, q) {
-        this.channel.bindQueue(q.queue, this.options.exchange, this.options.route);
-        this.channel.consume(q.queue,this.consumer);
-    }
+    // Создание канала
+    // async initChannels(err, channel) {
+    //     this.channel = channel;
+
+    //     if (err) {
+    //         throw err;
+    //     }
+    //     if (Array.isArray(this.options.queues)) {
+    //         for (let que of this.options.queues) {
+    //             await this.createChannels(que);
+    //         }
+    //     } else {
+    //         await this.createChannels(this.options.queues);
+    //     }
+    // }
+
+    // // Создание канала
+    // async createChannels(queues) {
+    //     let ok =  await this.channel.assertExchange(this.options.exchange, 'direct', {
+    //         durable: true
+    //     })
+    //     ok.then((err,ok)=>{
+    //         console.log(ok)
+    //         this.channel.assertQueue(queues, {},this.createExchangeRoute);
+    //     })
+    //     console.log(' [x] Awaiting RPC requests');
+    // }
+
+    // // Связываем очередь и роутер
+    // async createExchangeRoute(err, q) {
+    //     await this.channel.bindQueue(q.queue, this.options.exchange, this.options.route);
+    //     await this.channel.consume(q.queue,this.consumer);
+    // }
 
     // Отдаем ответ Gateway
     consumer(msg) {
@@ -68,6 +80,7 @@ class Server {
             res = res.toString();
         }
         console.log(res)
+        console.log("SERVER")
         // возвращаем ответ клиенту/сервису
         this.channel.publish(msg.properties.replyTo.queue,msg.properties.exchange,
             Buffer.from(res), {
